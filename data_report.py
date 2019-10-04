@@ -26,16 +26,19 @@ class BaselineParser:
 
     # baseline timestamps are all UTC
 
-    hostnames = set()
+    hostnames = None
     tasks_count = None
     plays_count = None
-    timestamps = set()
+    timestamps = None
     playbook_start = None
     playbook_stop = None
     taskmap = {}
-    rows = []
+    rows = None
 
     def __init__(self, filepath):
+        self.rows = []
+        self.hostnames = set()
+        self.timestamps = set()
         self._filepath = filepath
         self._data = self.load_baseline(self._filepath)
         self.process_meta()
@@ -1248,11 +1251,14 @@ def main():
     resdirs = sorted(resdirs)
     logger.info(resdirs)
 
-    rows = []
+    #rows = []
     for resdir in resdirs[::-1]:
 
         #if not resdir.endswith('7668'):
         #    continue    
+
+        #if '2.8.5' not in resdir:
+        #    continue
 
         fn = os.path.join('plots', '%s_plot.png' % os.path.basename(resdir))
         #if os.path.exists(fn):
@@ -1314,7 +1320,7 @@ def main():
             plt.clf()
             plt.cla()
             plt.close()
-            
+
         except Exception as e:
             print(e)
             #import epdb; epdb.st()

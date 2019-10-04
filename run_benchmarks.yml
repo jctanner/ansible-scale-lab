@@ -145,7 +145,7 @@
       #poll: 60
 
     - file:
-        dest: jobresults/"{{ inventory_hostname }}"
+        dest: "{{ 'jobresults/' + inventory_hostname }}"
         state: directory
       delegate_to: localhost
       connection: local

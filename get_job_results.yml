@@ -1,0 +1,17 @@
+- name: run the benchmark(s)
+  hosts: controllers
+  serial: 1
+  gather_facts: False
+  tasks:
+
+    - file:
+        dest: "{{ 'jobresults/' + inventory_hostname }}"
+        state: directory
+      delegate_to: localhost
+      connection: local
+
+    - synchronize:
+        mode: pull
+        src: ~/jobresults*
+        dest: "{{ 'jobresults/' +  inventory_hostname + '/.' }}"
+

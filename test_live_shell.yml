@@ -1,0 +1,10 @@
+- hosts: all
+  user: vagrant
+  gather_facts: False
+  serial: 1
+  vars:
+    ansible_private_key_file: .vagrant/machines/dockerhost/libvirt/private_key
+  tasks:
+    - live_shell:
+        command: for X in $(seq 1 10); do echo $X; sleep 1; done;
+        #command: /usr/bin/ps -aux | head -n 10

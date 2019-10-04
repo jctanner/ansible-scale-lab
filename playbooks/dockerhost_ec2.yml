@@ -1,0 +1,32 @@
+- name: make sure python is installed
+  hosts: dockerhosts
+  gather_facts: False
+  tasks:
+    #- raw: which python || sudo dnf -y install python2
+    #- raw: rpm -q python2-policycoreutils || sudo dnf -y install python2-policycoreutils
+
+- name: add the roles
+  hosts: dockerhosts
+  gather_facts: False
+  roles:
+    - common
+
+- name: install docker
+  hosts: dockerhosts
+  gather_facts: False
+  tasks:
+    - name: check uid
+      shell: whoami
+    - name: update system packages
+      shell: sudo yum -y update --exclude=kernel*
+    - name: install docker
+      shell: which docker || sudo yum -y install docker
+    - name: start docker
+      shell: sudo docker ps || sudo systemctl restart docker
+    - name: copy the container spawn script
+      copy:
+        src: spawncontainers.sh
+        dest: /root/spawncontainers.sh
+        mode: 0777
+      become: True
+

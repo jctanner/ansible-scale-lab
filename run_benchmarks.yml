@@ -1,0 +1,157 @@
+- name: prepare the controllers
+  hosts: controllers
+  gather_facts: False
+  vars:
+    packages:
+        - python2-cryptography
+        - python-paramiko
+        - python-six
+        - PyYAML
+        - libyaml
+        - python-jinja2
+        - libcgroup-tools
+        - psmisc
+        - sshpass
+  tasks:
+    - debug: var=hostvars[inventory_hostname]
+    - name: hostname+whoami
+      shell: hostname; whoami
+    - package:
+        name: epel-release
+        state: present
+      become: "{{ use_become }}"
+    - package:
+        name: "{{ packages|join(',') }}"
+        state: present
+      become: "{{ use_become }}"
+
+    - git:
+        repo: https://github.com/jctanner/ansible-tools
+        dest: ~/ansible-tools
+    - git:
+        repo: https://github.com/jctanner/ansible-baseline
+        dest: ~/ansible-baseline
+    - file:
+        src: ~/ansible-baseline/callback_plugins
+        dest: ~/callback_plugins
+        state: link
+ 
+    #- name: sync ansible-tools
+    #  synchronize:
+    #    src: ansible-tools
+    #    dest: ~/
+    #- name: sync the baseline callback
+    #  synchronize:
+    #    src: ansible-baseline/callback_plugins
+    #    dest: ~/
+
+    - copy:
+        src: benchmark_1.yml
+        dest: ~/benchmark_1.yml
+
+    - copy:
+        src: docker_inventory.py
+        dest: ~/docker_inventory.py
+        mode: '0700'
+
+    - copy:
+        src: files/docker_inventory_sshuttle.py
+        dest: ~/docker_inventory_sshuttle.py
+        mode: '0700'
+
+    - copy:
+        src: cluster_inventory.yml
+        dest: ~/cluster_inventory.yml
+
+    - copy:
+        src: benchmark_ansible.cfg
+        dest: ~/ansible.cfg
+
+    - name: create the cgroup
+      shell: cgcreate -a {{ ansible_user + ':' + ansible_user }} -t {{ ansible_user + ':' + ansible_user }} -g cpuacct,memory,pids:ansible_profile creates=/sys/fs/cgroup/cpu/ansible_profile
+      become: "{{ use_become }}"
+
+
+- name: run the benchmark(s)
+  hosts: controllers
+  serial: 1
+  gather_facts: False
+  vars:
+    #benchmark_inventory_file: cluster_inventory.yml
+    benchmark_inventory_file: docker_inventory.py
+    matrix:
+        #- [VERSION, HOSTS, FORKS, PLAYBOOK]
+ 
+        #- ['ansible-2.9.0rc1', 10, 1, 'benchmark_1.yml']
+
+        #- ['ansible-2.8.5', 10, 'benchmark_1.yml']
+ 
+        #- ['ansible-2.9.0b1', 10, 1, 'benchmark_1.yml']
+        #- ['ansible-2.9.0b1', 10, 5, 'benchmark_1.yml']
+        #- ['ansible-2.9.0b1', 10, 5, 'benchmark_1.yml']
+  
+        #- ['ansible-2.9.0rc1', 100, 5, 'benchmark_1.yml']
+        #- ['ansible-2.9.0rc1', 100, 10, 'benchmark_1.yml']
+        #- ['ansible-2.9.0rc1', 100, 25, 'benchmark_1.yml']
+        #
+        - ['ansible-2.8.5', 1000, 5, 'benchmark_1.yml']
+        #- ['ansible-2.8.5', 1000, 25, 'benchmark_1.yml']
+        #- ['ansible-2.9.0rc1', 1000, 25, 'benchmark_1.yml']
+        #- ['ansible-2.9.0b1', 100, 50, 'benchmark_1.yml']
+
+        #- ['ansible-2.9.0b1', 500, 5, 'benchmark_1.yml']
+        #- ['ansible-2.9.0b1', 500, 10, 'benchmark_1.yml']
+        #- ['ansible-2.9.0b1', 500, 25, 'benchmark_1.yml']
+        #- ['ansible-2.9.0b1', 500, 50, 'benchmark_1.yml']
+
+        #- ['ansible-2.9.0b1', 1000, 5, 'benchmark_1.yml']
+        #- ['ansible-2.9.0b1', 1000, 10, 'benchmark_1.yml']
+        #- ['ansible-2.9.0b1', 1000, 15, 'benchmark_1.yml']
+        #- ['ansible-2.9.0b1', 1000, 20, 'benchmark_1.yml']
+        #- ['ansible-2.9.0b1', 1000, 25, 'benchmark_1.yml']
+        #- ['ansible-2.9.0b1', 1000, 50, 'benchmark_1.yml']
+
+  tasks:
+
+    - shell: killall vmstat
+      ignore_errors: True
+    - shell: killall top
+      ignore_errors: True
+
+    #- fail:
+    #- shell: rm -rf ~/jobresults*
+    #- shell: >
+    - live_shell: 
+        command: |
+            killall top
+            killall vmstat
+            export CONTAINER_COUNT="{{ item[1] }}"
+            export CGROUP_CONTROL_GROUP=ansible_profile
+            export JULIAN_SYSLOG=1
+            export JULIAN_CGROUP_PERF_RECAP=1
+            export JULIAN_BASELINE=1
+            export JULIAN_VMSTAT=1
+            export JULIAN_TOP=1
+            export JULIAN_NETDEV=1
+            export ANSIBLE_VERSION="{{ item[0] }}"
+            ./ansible-tools/profiling/julian \
+                -vvvv \
+                -i "{{ benchmark_inventory_file }}" \
+                --limit=all[0:{{ item[1] }}] \
+                --forks={{ item[2] }} \
+                {{ item[3] }}
+      loop: "{{ matrix }}"
+      #async: 1000
+      #poll: 60
+
+    - file:
+        dest: jobresults/"{{ inventory_hostname }}"
+        state: directory
+      delegate_to: localhost
+      connection: local
+
+    - synchronize:
+        mode: pull
+        src: ~/jobresults*
+        dest: "{{ 'jobresults/' +  inventory_hostname + '/.' }}"
+

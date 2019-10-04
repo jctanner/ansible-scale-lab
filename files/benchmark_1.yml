@@ -1,0 +1,22 @@
+- hosts: all
+  gather_facts: False
+  tasks:
+    - name: raw.start.cp
+      raw: whoami
+
+    - name: raw.whoami
+      raw: whoami
+    - name: command.whoami
+      command: whoami
+    - name: shell.whoami
+      shell: whoami
+
+    - name: raw.echo
+      raw: echo "foo"
+    - name: command.echo
+      command: echo "foo" 
+    - name: shell.echo
+      shell: echo "foo"
+
+    - name: setup
+      setup:

@@ -1,0 +1,1 @@
+../playbooks/files/docker_inventory.py

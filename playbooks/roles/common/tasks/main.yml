@@ -1,0 +1,50 @@
+- name: get the distro name
+  shell: cat /etc/redhat-release | awk '{print $1}'
+  register: distro_name
+
+- name: copy the vimrc
+  copy:
+    src: vimrc
+    dest: /etc/vimrc
+    mode: 0777
+  become: True
+
+- name: install epel
+  package:
+    name: epel-release
+    state: present
+  become: True
+  when: "distro_name.stdout|lower in ['centos', 'rhel']"
+  ignore_errors: True
+
+- set_fact:
+    common_packages:
+      - sshpass
+      - python-pip
+      - git
+      - vim-enhanced
+      - strace
+      - net-tools
+      - lsof
+      - iptraf-ng
+      - bc
+      - sysstat
+
+- name: install common packages
+  package:
+    name: "{{ common_packages|join(',') }}"
+    state: present
+  become: True
+
+- name: install towercli
+  pip:
+    name: ansible-tower-cli
+    state: latest
+  become: True
+
+- name: turn on sysstat
+  service:
+    name: sysstat
+    state: started
+    enabled: True
+  become: True

@@ -62,7 +62,8 @@ class BaselineParser:
             playcount += 1
 
             self.timestamps.add(play['play']['duration']['start'])
-            self.timestamps.add(play['play']['duration']['end'])
+            if 'end' in play['play']['duration']:
+                self.timestamps.add(play['play']['duration']['end'])
 
             for task in play['tasks']:
                 taskcount += 1
@@ -798,6 +799,25 @@ def load_cpuinfo(resdir):
     return meta
 
 
+def load_meminfo(resdir):
+
+    meta = {
+    }
+
+    memfile = os.path.join(resdir, 'proc.meminfo.txt')
+    with open(memfile, 'r') as f:
+        for line in f.readlines():
+            line = line.replace(':', '')
+            line = line.replace('kB', '')
+            parts = line.split()
+            parts = [x.strip() for x in parts if x.strip()]
+            if not parts:
+                continue
+            meta['meminfo_' + parts[0]] = int(parts[-1])
+
+    return meta
+
+
 def load_vmstat(resdir):
     vmstat_file = os.path.join(resdir, 'vmstat.log')
     with open(vmstat_file, 'r') as f:
@@ -870,7 +890,7 @@ def load_syslog(resdir):
 
 
 def load_netdev(resdir):
-    
+
     '''
     1570072473
     Inter-|   Receive                                                |  Transmit
@@ -936,6 +956,7 @@ def load_results_directory(resdir):
         dd = {}
         dd['meta'] = load_stdout_log(resdir)
         dd['meta'].update(load_cpuinfo(resdir))
+        dd['meta'].update(load_meminfo(resdir))
         dd['cgdata'] = load_cgroup_data(resdir)
         dd['baseline'] = BaselineParser(os.path.join(resdir, 'baseline.json'))
         dd['top'] = load_top(resdir)
@@ -1254,13 +1275,18 @@ def main():
     #rows = []
     for resdir in resdirs[::-1]:
 
+        baseline_file = os.path.join(resdir, 'baseline.json')
+        if not os.path.isfile(baseline_file):
+            logger.error('%s has no baseline.json' % resdir)
+            continue
+
         #if not resdir.endswith('7668'):
         #    continue    
 
         #if '2.8.5' not in resdir:
         #    continue
 
-        fn = os.path.join('plots', '%s_plot.png' % os.path.basename(resdir))
+        #fn = os.path.join('plots', '%s_plot.png' % os.path.basename(resdir))
         #if os.path.exists(fn):
         #    continue
 
@@ -1271,7 +1297,7 @@ def main():
         if len(_rows) < 1:
             continue
 
-        logger.info(fn)
+        #logger.info(fn)
         try:
 
             df = pd.DataFrame.from_records(_rows, index='time')
@@ -1303,13 +1329,20 @@ def main():
             #import epdb; epdb.st()
             '''
 
-            df = df.sample(n=300)
-            df.sort_index(inplace=True)
-            logger.info('shape: %s' % str(df.shape))
+            ######################################
+            # all-in-one plot
+            ######################################
+            '''
+            fn = os.path.join('plots', '%s_plot.png' % os.path.basename(resdir))
+            logger.info(fn)
+            df1 = df.copy(deep=True)
+            df1 = df1.sample(n=300)
+            df1.sort_index(inplace=True)
+            logger.info('shape: %s' % str(df1.shape))
 
             ax = plt.gca()
             logger.debug('.plot')
-            splts = df.plot(kind='bar', figsize=(24,100), subplots=True)
+            splts = df1.plot(kind='bar', figsize=(24,100), subplots=True)
             #for splt in splts:
             #    plt.plot(splt)
             #splt.tofile(fn)
@@ -1320,16 +1353,69 @@ def main():
             plt.clf()
             plt.cla()
             plt.close()
+            '''
+
+            ######################################
+            # interesting bits
+            ######################################
+            title = '%s hosts %s forks %s tasks %s cpus %s cpuMHZ %s memGB' % \
+                    (
+                        _rows[0]['hosts'],
+                        _rows[0]['forks'],
+                        _rows[0]['tasks_count'],
+                        rd['meta']['processors'],
+                        rd['meta']['processor_mhz'],
+                        (rd['meta']['meminfo_MemTotal'] / float((1024 * 1024))),
+                    )
+            fn2 = os.path.join('plots', '%s_plot_highlights.png' % os.path.basename(resdir))
+            logger.info(fn2)
+            df2 = df.copy(deep=True)
+            #import epdb; epdb.st()
+            df2['hosts_remaining_%'] = (df2['hosts_remaining'] / df2['hosts']) * 100
+            df2['forks_active_%'] = (df2['hosts_active'] / df2['forks']) * 100
+            df2['mem_used_%'] = (df2['top_kib_mem_used'] / df2['top_kib_mem_total']) * 100
+            colnames = list(df2.columns)
+            toremove = [
+                x for x in colnames if 
+                #not x.startswith('host') and
+                not x == 'hosts_remaining_%' and
+                #not x.startswith('task') and
+                #not x.startswith('fork') and
+                not x.startswith('forks_active_%') and
+                not x.startswith('cgroup') and 
+                #not ('mem' in x and 'top' in x and 'free' in x) and 
+                not  x == 'mem_used_%' and 
+                not ('cpu' in x and 'top' in x)
+            ]
+            df2.drop(toremove, axis=1, inplace=True)
+            ax = df2.plot(kind='line', figsize=(20,12), title=title)
+            #ax.annotate('ANNOTATION!', (1,1))
+            #ax.annotate((1,1), 'ANNOTATION!')
+            #ax.text(0,0, 'TEST TEST TEST')
+
+            #f = plt.figure()
+            #plt.legend(loc='center left', bbox_to_anchor=(1.0, 0.5))
+            #plt.legend(loc='center left', bbox_to_anchor=(.5, 1.0))
+            plt.legend(loc='center left', bbox_to_anchor=(1.0, .9))
+            plt.subplots_adjust(right=0.8)
+
+            plt.savefig(fn2)
+            plt.clf()
+            plt.cla()
+            plt.close()
+            #import epdb; epdb.st()
 
         except Exception as e:
             print(e)
             #import epdb; epdb.st()
             pass
 
+        '''
         fn2 = os.path.join(
             'plots',
             'h%s_f%s_%s_plot.png' % (
-                str(rd['meta']['limit']),
+                #str(rd['meta']['limit']),
+                str(len(rd['baseline'].hostnames)),
                 str(rd['meta']['forks']),
                 os.path.basename(resdir)
             )
@@ -1341,6 +1427,7 @@ def main():
         (so, se) = pid.communicate()
         logger.debug(str(so) + str(se))
         #import epdb; epdb.st()
+        '''
 
 
 if __name__ == "__main__":

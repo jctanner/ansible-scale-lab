@@ -95,8 +95,9 @@ class BaselineParser:
 
         # store the min and max
         self.timestamps = sorted(set(self.timestamps), key=lambda x: to_datetime(x))
-        self.playbook_start = self.timestamps[0]
-        self.playbook_stop = self.timestamps[-1]
+        if self.timestamps:
+            self.playbook_start = self.timestamps[0]
+            self.playbook_stop = self.timestamps[-1]
 
     def build_rows(self):
 
@@ -130,6 +131,7 @@ class BaselineParser:
                     if row['time'] >= tstart:
                         rows[idr]['task_number'] = taskcount
 
+        '''
         # add each active host to the rows for that timespan
         playcount = -1
         taskcount = -1
@@ -140,18 +142,16 @@ class BaselineParser:
                 for hn,hdata in task['hosts'].items():
 
                     hstart = to_datetime(hdata['duration']['start'])
-                    #hstart = datetime.datetime.strptime(hstart, '%Y-%m-%dT%H:%M:%S.%f')
                     hstop = to_datetime(hdata['duration']['end'])
-                    #hstop = datetime.datetime.strptime(hstop, '%Y-%m-%dT%H:%M:%S.%f')
+
+                    #hstart = to_datetime(hdata['offset']['start'])
+                    #hstop = to_datetime(hdata['offset']['end'])
 
                     for idr,row in enumerate(rows):
 
                         ts = row['time']
-                        #ts = datetime.datetime.strptime(ts, '%Y-%m-%dT%H:%M:%S.%f')
 
                         if ts >= hstart and ts <= hstop:
-                            #rows[idr]['play_number'] = playcount
-                            #rows[idr]['task_number'] = taskcount
                             rows[idr]['hosts_active'].add(hn)
 
         # calculate hosts remaining
@@ -161,46 +161,30 @@ class BaselineParser:
         pn = None
         tn = None
         for idr,row in enumerate(rows):
-            '''
-            if pn is None or tn is None or pn < row['play_number'] or tn < row['task_number']:
-                #print(row)
-                #rows[idr]['hosts_remaining'] = set(list(self.hostnames)[:])
-                #print(rows[idr])
-                pn = row['play_number']
-                tn = row['task_number']
-                continue
-            '''
             pn = row['play_number']
             tn = row['task_number']
             for _idr,_row in enumerate(rows):
 
                 if _row['task_number'] is None:
                     continue
-                    #import epdb; epdb.st()
 
-                #if _row['play_number'] != pn:
-                #    continue
                 if _row['task_number'] != tn:
                     continue
                 if _row['task_number'] > tn:
                     break
-                #if _idr >= idr:
+
                 if _row['time'] >= row['time']:
                     for hn in row['hosts_active']:
                         #print(hn)
                         if hn in rows[_idr]['hosts_remaining']:
                             #print(hn)
                             rows[_idr]['hosts_remaining'].remove(hn)
+        '''
 
         # set counts instead of lists
         for idr,row in enumerate(rows):
             rows[idr]['hosts_active'] = len(row['hosts_active'])
             rows[idr]['hosts_remaining'] = len(row['hosts_remaining'])
-
-        #import epdb; epdb.st()
-        #good = [x for x in rows if x['hosts_remaining'] != 0 and x['hosts_remaining'] != 100]
-        #if not good:
-        #    import epdb; epdb.st()
 
         for idr,row in enumerate(rows):
             row['time']= to_iso(row['time'])
@@ -981,6 +965,7 @@ def results_to_rows(rd, resdir=None):
 
     _row = {
         'time': None,
+        'src': None,
         'mem_total': None,
         'cpus_total': rd['meta']['processors'],
         'cpus_mhz': rd['meta']['processor_mhz'],
@@ -1004,12 +989,28 @@ def results_to_rows(rd, resdir=None):
     #if not rd['baseline']:
     #    return rows
 
+    # START NETDEV
+    logger.debug('netdev to rows ...')
+    for row in rd['netdev']:
+        thisrow = {}
+        thisrow['src'] = 'netdev'
+        for k,v in row.items():
+            if k == 'time':
+                thisrow[k] = v
+            else:
+                thisrow['netdev_' + k] = v
+        rows.append(thisrow)
+
+    # END NETDEV
+
     ###########################
     # START BASELINE
     ###########################
     baseline = rd['baseline']
     _row['hosts'] = len(baseline.hostnames)
-    rows += baseline.rows[:]
+    for blr in baseline.rows:
+        blr['src'] = 'baseline'
+        rows.append(blr)
 
     ###########################
     # START SYSLOG
@@ -1071,9 +1072,12 @@ def results_to_rows(rd, resdir=None):
     ###########################
     logger.debug('cgroups')
     #bts = ts_blocks['baseline'][0]
-    bts = baseline.timestamps[0]
-    bts = datetime.datetime.strptime(bts, '%Y-%m-%dT%H:%M:%S.%f')
+    bts = None
     bts_offset = None
+    if baseline.timestamps:
+        bts = baseline.timestamps[0]
+        bts = datetime.datetime.strptime(bts, '%Y-%m-%dT%H:%M:%S.%f')
+        bts_offset = None
     cgroup_timestamps = set()
     #import epdb; epdb.st()
 
@@ -1134,28 +1138,48 @@ def results_to_rows(rd, resdir=None):
 
     # START TOP
     logger.debug('top')
-    YMD = rows[-1]['time'].split('T')[0]
+    if rows:
+        YMD = rows[-1]['time'].split('T')[0]
+    else:
+        YMD = resdir.split('.')[-2].split('T')[0]
+
+    if bts is None and rows:
+        bts = to_datetime(rows[0]['time'])
+        baseline.playbook_start = to_iso(bts)
+        baseline.playbook_stop = to_iso(to_datetime(rows[-1]['time']))
+    
     bts_offset = None
     for trow in rd['top']:
         row = copy.deepcopy(_row)
+        row['src'] = 'top'
         for k,v in trow.items():
             if k == 'ts':
                 ts = YMD + 'T' + v + '.000000'
                 ts = datetime.datetime.strptime(ts, '%Y-%m-%dT%H:%M:%S.%f')
-                if bts_offset is None:
-                    bts_offset = bts.hour - ts.hour
-                ts = ts.replace(hour=ts.hour + bts_offset)
+                if baseline.rows:
+                    if bts_offset is None:
+                        bts_offset = bts.hour - ts.hour
+                    try:
+                        toff = ts.hour + bts_offset
+                        if toff >= 24:
+                            toff = toff - 24
+                        ts = ts.replace(hour=toff)
+                    except ValueError as e:
+                        print(e)
+                        import epdb; epdb.st()
                 row['time'] = ts.isoformat()
             else:
                 row['top_' + k] = v
         rows.append(row)
     # END TOP
 
+    '''
     # START VMSTAT
     logger.debug('vmstat')
     bts_offset = None
     for vrow in rd['vmstat']:
         row = copy.deepcopy(_row)
+        row['src'] = 'vmstat'
         for k,v in vrow.items():
             if k == 'ts':
                 ts = datetime.datetime.fromtimestamp(v)
@@ -1176,21 +1200,7 @@ def results_to_rows(rd, resdir=None):
                 row[k] = v
         rows.append(row)
     # END VMSTAT
-
-
-    # START NETDEV
     '''
-    for row in rd['netdev']:
-        thisrow = {}
-        for k,v in row.items():
-            if k == 'time':
-                thisrow[k] = v
-            else:
-                thisrow['netdev_' + k] = v
-        rows.append(thisrow)
-    '''
-    # END NETDEV
-
 
     # ensure all timestamps have microseconds
     for idr,row in enumerate(rows):
@@ -1262,7 +1272,32 @@ def results_to_rows(rd, resdir=None):
         if row['task_number'] and ltn and ltn > row['task_number']:
             import epdb; epdb.st()
 
-    rows = [x for x in rows if x['time'] >= baseline.playbook_start and x['time'] <= baseline.playbook_stop]
+    if baseline.timestamps:
+        rows = [x for x in rows if x['time'] >= baseline.playbook_start and x['time'] <= baseline.playbook_stop]
+    else:
+        start = None
+        stop = None
+        #key = 'top_pids_playbook'
+        key = 'netdev_tx_bytes'
+        for x in rows:
+            if x['src'] != 'top':
+                continue
+            if x[key] and x[key] > 0 and x['time']:
+                start = x['time']
+                break
+        for x in rows[::-1]:
+            if x['src'] != 'top':
+                continue
+            if x[key] and x[key] > 0 and x['time']:
+                stop = x['time']
+                break
+
+        start_dt = to_datetime(start)
+        stop_dt = to_datetime(stop)
+        import epdb; epdb.st()
+
+        rows = [x for x in rows if x['time'] >= start and x['time'] <= stop]
+        #import epdb; epdb.st()
 
     return rows
 
@@ -1276,9 +1311,11 @@ def main():
     for resdir in resdirs[::-1]:
 
         baseline_file = os.path.join(resdir, 'baseline.json')
-        if not os.path.isfile(baseline_file):
-            logger.error('%s has no baseline.json' % resdir)
-            continue
+        #if not os.path.isfile(baseline_file):
+        #    logger.error('%s has no baseline.json' % resdir)
+        #    continue
+        #if os.path.isfile(baseline_file):
+        #    continue
 
         #if not resdir.endswith('7668'):
         #    continue    
@@ -1371,24 +1408,32 @@ def main():
             logger.info(fn2)
             df2 = df.copy(deep=True)
             #import epdb; epdb.st()
-            df2['hosts_remaining_%'] = (df2['hosts_remaining'] / df2['hosts']) * 100
-            df2['forks_active_%'] = (df2['hosts_active'] / df2['forks']) * 100
+            if 'hosts_remaining' in df2.columns:
+                df2['hosts_remaining_%'] = (df2['hosts_remaining'] / df2['hosts']) * 100
+            if 'hosts_active' in df2.columns:
+                df2['forks_active_%'] = (df2['hosts_active'] / df2['forks']) * 100
+            df2['playbook_pids_fork_%'] = (df2['top_pids_playbook'] / (df2['forks'] + 1)) * 100
+            if 'task_number' in df2.columns:
+                df2['task_count_%'] = (df2['task_number'] / df2['tasks_count']) * 100
             df2['mem_used_%'] = (df2['top_kib_mem_used'] / df2['top_kib_mem_total']) * 100
             colnames = list(df2.columns)
             toremove = [
                 x for x in colnames if 
                 #not x.startswith('host') and
-                not x == 'hosts_remaining_%' and
+                #not x == 'hosts_remaining_%' and
                 #not x.startswith('task') and
                 #not x.startswith('fork') and
-                not x.startswith('forks_active_%') and
+                #not x.startswith('forks_active_%') and
                 not x.startswith('cgroup') and 
                 #not ('mem' in x and 'top' in x and 'free' in x) and 
                 not  x == 'mem_used_%' and 
-                not ('cpu' in x and 'top' in x)
+                not ('cpu' in x and 'top' in x) and
+                not 'playbook_pids_fork' in x and 
+                not x == 'task_count_%'
+                #not 'netdev' in x
             ]
             df2.drop(toremove, axis=1, inplace=True)
-            ax = df2.plot(kind='line', figsize=(20,12), title=title)
+            ax = df2.plot(kind='line', figsize=(20,12), title=title, ylim=(0,400))
             #ax.annotate('ANNOTATION!', (1,1))
             #ax.annotate((1,1), 'ANNOTATION!')
             #ax.text(0,0, 'TEST TEST TEST')

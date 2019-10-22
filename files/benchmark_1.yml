@@ -1,5 +1,8 @@
 - hosts: all
   gather_facts: False
+  connection: ssh_killer
+  ignore_errors: True
+  ignore_unreachable: True
   tasks:
     - name: raw.start.cp
       raw: whoami

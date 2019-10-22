@@ -9,6 +9,7 @@
         - PyYAML
         - libyaml
         - python-jinja2
+        - python2-psutil
         - libcgroup-tools
         - psmisc
         - sshpass
@@ -25,16 +26,29 @@
         state: present
       become: "{{ use_become }}"
 
-    - git:
+    - name: make sure python is updated
+      shell: yum -y update python*
+      become: "{{ use_become }}"
+
+    - name: fetch ansible-tools
+      git:
         repo: https://github.com/jctanner/ansible-tools
         dest: ~/ansible-tools
-    - git:
+    - name: fetch ansible-baseline
+      git:
         repo: https://github.com/jctanner/ansible-baseline
         dest: ~/ansible-baseline
     - file:
         src: ~/ansible-baseline/callback_plugins
         dest: ~/callback_plugins
         state: link
+
+    - file:
+        path: ~/connection_plugins
+        state: directory
+    - copy:
+        src: connection_plugins/ssh_killer.py
+        dest: ~/connection_plugins/ssh_killer.py
  
     #- name: sync ansible-tools
     #  synchronize:
@@ -93,8 +107,62 @@
         #- ['ansible-2.9.0rc1', 100, 5, 'benchmark_1.yml']
         #- ['ansible-2.9.0rc1', 100, 10, 'benchmark_1.yml']
         #- ['ansible-2.9.0rc1', 100, 25, 'benchmark_1.yml']
-        #
-        - ['ansible-2.8.5', 1000, 5, 'benchmark_1.yml']
+ 
+        #- ['ansible-2.8.5', 1000, 1, 'benchmark_1.yml']
+        #- ['ansible-2.8.5', 1000, 2, 'benchmark_1.yml']
+        #- ['ansible-2.8.5', 1000, 3, 'benchmark_1.yml']
+        #- ['ansible-2.8.5', 1000, 4, 'benchmark_1.yml']
+        #- ['ansible-2.8.5', 1000, 5, 'benchmark_1.yml']
+        #- ['ansible-2.8.5', 1000, 6, 'benchmark_1.yml']
+        #- ['ansible-2.8.5', 1000, 7, 'benchmark_1.yml']
+        #- ['ansible-2.8.5', 1000, 8, 'benchmark_1.yml']
+        #- ['ansible-2.8.5', 1000, 9, 'benchmark_1.yml']
+        #- ['ansible-2.8.5', 1000, 10, 'benchmark_1.yml']
+
+        #- ['ansible-2.9.0rc2', 1000, 1, 'benchmark_1.yml']
+        #- ['ansible-2.9.0rc2', 1000, 2, 'benchmark_1.yml']
+ 
+        #- ['ansible-2.9.0rc2', 1000, 3, 'benchmark_1.yml']
+        #- ['ansible-2.9.0rc2', 1000, 4, 'benchmark_1.yml']
+        #- ['ansible-2.9.0rc2', 1000, 5, 'benchmark_1.yml']
+        #- ['ansible-2.9.0rc2', 1000, 6, 'benchmark_1.yml']
+        #- ['ansible-2.9.0rc2', 1000, 7, 'benchmark_1.yml']
+        #- ['ansible-2.9.0rc2', 1000, 8, 'benchmark_1.yml']
+        #- ['ansible-2.9.0rc2', 1000, 9, 'benchmark_1.yml']
+        #- ['ansible-2.9.0rc2', 1000, 10, 'benchmark_1.yml']
+
+        #- ['ansible-2.9.0rc2', 1000, 15, 'benchmark_1.yml']
+        #- ['ansible-2.9.0rc2', 1000, 20, 'benchmark_1.yml']
+        #- ['ansible-2.9.0rc2', 1000, 25, 'benchmark_1.yml']
+        #- ['ansible-2.9.0rc2', 1000, 30, 'benchmark_1.yml']
+        #- ['ansible-2.9.0rc2', 1000, 35, 'benchmark_1.yml']
+
+        #- ['ansible-2.9.0rc2', 5000, 5, 'benchmark_1.yml']
+        #- ['ansible-2.9.0rc2', 5000, 10, 'benchmark_1.yml']
+        #- ['ansible-2.9.0rc2', 5000, 15, 'benchmark_1.yml']
+        #- ['ansible-2.9.0rc2', 5000, 20, 'benchmark_1.yml']
+        #- ['ansible-2.9.0rc2', 5000, 25, 'benchmark_1.yml']
+        #- ['ansible-2.9.0rc2', 5000, 30, 'benchmark_1.yml']
+        #- ['ansible-2.9.0rc2', 5000, 35, 'benchmark_1.yml']
+
+        #- ['ansible-2.9.0rc2', 5000, 45, 'benchmark_1.yml']
+        #- ['ansible-2.9.0rc2', 5000, 50, 'benchmark_1.yml']
+        #- ['ansible-2.9.0rc2', 5000, 55, 'benchmark_1.yml']
+        #- ['ansible-2.9.0rc2', 5000, 60, 'benchmark_1.yml']
+        #- ['ansible-2.9.0rc2', 5000, 65, 'benchmark_1.yml']
+
+        #- ['ansible-2.9.0rc2', 5000, 70, 'benchmark_1.yml']
+        #- ['ansible-2.9.0rc2', 5000, 75, 'benchmark_1.yml']
+        #- ['ansible-2.9.0rc2', 5000, 80, 'benchmark_1.yml']
+        #- ['ansible-2.9.0rc2', 5000, 85, 'benchmark_1.yml']
+        - ['ansible-2.9.0rc2', 5000, 90, 'benchmark_1.yml']
+        - ['ansible-2.9.0rc2', 5000, 95, 'benchmark_1.yml']
+        - ['ansible-2.9.0rc2', 5000, 100, 'benchmark_1.yml']
+
+        #- ['ansible-2.8.5', 1000, 15, 'benchmark_1.yml']
+        #- ['ansible-2.8.5', 1000, 20, 'benchmark_1.yml']
+        #- ['ansible-2.8.5', 1000, 25, 'benchmark_1.yml']
+
         #- ['ansible-2.8.5', 1000, 25, 'benchmark_1.yml']
         #- ['ansible-2.9.0rc1', 1000, 25, 'benchmark_1.yml']
         #- ['ansible-2.9.0b1', 100, 50, 'benchmark_1.yml']
@@ -117,6 +185,9 @@
       ignore_errors: True
     - shell: killall top
       ignore_errors: True
+    - raw: ps aux | egrep ^vagrant | awk '{print $2}' | xargs kill
+      ignore_errors: True
+      ignore_unreachable: True
 
     #- fail:
     #- shell: rm -rf ~/jobresults*
@@ -125,6 +196,8 @@
         command: |
             killall top
             killall vmstat
+            ps aux | egrep ^vagrant
+            ps aux | egrep ^vagrant | fgrep -v live | fgrep -v sshd | awk '{print $2}' | xargs kill
             export CONTAINER_COUNT="{{ item[1] }}"
             export CGROUP_CONTROL_GROUP=ansible_profile
             export JULIAN_SYSLOG=1
@@ -135,7 +208,6 @@
             export JULIAN_NETDEV=1
             export ANSIBLE_VERSION="{{ item[0] }}"
             ./ansible-tools/profiling/julian \
-                -vvvv \
                 -i "{{ benchmark_inventory_file }}" \
                 --limit=all[0:{{ item[1] }}] \
                 --forks={{ item[2] }} \
@@ -145,7 +217,7 @@
       #poll: 60
 
     - file:
-        dest: "{{ 'jobresults/' + inventory_hostname }}"
+        dest: jobresults/"{{ inventory_hostname }}"
         state: directory
       delegate_to: localhost
       connection: local

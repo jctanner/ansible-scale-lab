@@ -1,0 +1,11 @@
+ansible
+asn1crypto
+epdb
+Jinja2
+logzero
+matplotlib
+numpy
+pandas
+python-dateutil
+pytz
+q

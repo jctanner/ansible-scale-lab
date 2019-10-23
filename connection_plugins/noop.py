@@ -81,6 +81,13 @@ class Connection(ConnectionBase):
         else:
             time.sleep(.1)
 
+        #print(cmd)
+        if 'python' in cmd and 'AnsiballZ' in cmd and '_setup.py' in cmd:
+            jfile = 'connection_plugins/facts.json'
+            with open(jfile, 'r') as f:
+                jdata = f.read()
+            return (0, jdata, '')
+
         return (0, '{}', '')
 
     def put_file(self, in_path, out_path):

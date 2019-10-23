@@ -12,7 +12,7 @@
   tasks:
     - name: shell.whoami.1
       shell: whoami
+    - name: setup
+      setup:
     - name: shell.whoami.2
-      shell: whoami
-    - name: shell.whoami.3
       shell: whoami

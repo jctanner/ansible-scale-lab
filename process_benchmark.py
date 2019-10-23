@@ -11,6 +11,11 @@ import shutil
 import time
 from collections import OrderedDict
 from logzero import logger
+import pandas as pd
+import matplotlib.pyplot as plt
+import matplotlib.style
+import matplotlib as mpl
+mpl.style.use('ggplot')
 
 
 def process_files(files):
@@ -74,33 +79,6 @@ def process_files(files):
             'hosts_remaining': list(hosts)[:]
         }
 
-    '''
-    logger.info('calculate hosts remaining')
-    # calculate remaining
-    obskeys = sorted(obs.keys())
-    for idkts,kts in enumerate(obskeys):
-        kd = obs[kts]
-        obsix = obskeys.index(kts)
-
-        for idhqs,hqs in enumerate(host_queue_starts):
-
-            if hqs['task_uuid'] == kd['task_uuid']:
-                if hqs['time'] >= kd['time']:
-
-                    # remove the hosts from all future timestamps
-                    for key in obskeys[obsix:]:
-                        #if key < hqs['time']:
-                        #    continue
-                        if obs[key]['task_uuid'] != kd['task_uuid']:
-                            continue
-                        if key < hqs['time']:
-                            continue
-                        print('%s %s %s %s' % (idkts, kts, key, idhqs))
-                        for hn in kd['hosts_active']:
-                            if hn in obs[key]['hosts_remaining']:
-                                obs[key]['hosts_remaining'].remove(hn)
-    '''
-
     logger.info('calculate hosts remaining')
     # calculate remaining
     obs_timestamps = sorted(obs.keys())
@@ -118,23 +96,86 @@ def process_files(files):
         obs[obs_timestamp]['hosts_remaining'] = remaining[:]
 
     logger.info('compute sums')
+    tasks_total = None
     for kts,kd in obs.items():
         obs[kts]['forks'] = meta['forks']
         obs[kts]['hosts_active'] = len(kd['hosts_active'])
         obs[kts]['hosts_remaining'] = len(kd['hosts_remaining'])
-        tn = list(tasks.keys()).index(kd['task_uuid'])
+        tn = list(tasks.keys()).index(kd['task_uuid']) + 1
         obs[kts]['task_number'] = tn
+        if tasks_total is None or tn > tasks_total:
+            tasks_total = tn
 
-    return obs
+    meta['tasks_total'] = tasks_total
+    meta['hosts_total'] = len(list(hosts))
+
+    return meta,list(obs.values())
+
+
+def graph_observations(meta, obs):
+
+    logger.info('creating plot ...')
+
+    title = '%s hosts, %s forks' % (meta['hosts_total'], meta['forks'])
+    df = pd.DataFrame.from_records(list(obs), index='time')
+    df.sort_index(axis=1, inplace=True)
+
+    '''
+    df.drop(['forks'], axis=1, inplace=True)
+    df['task_number'] = (df['task_number'] / meta['tasks_total']) * 100.0
+    df['forks_active'] = (df['hosts_active'] / meta['forks']) * 100.0
+    df['hosts_active'] = (df['hosts_active'] / meta['hosts_total']) * 100.0
+    df['hosts_remaining'] = (df['hosts_remaining'] / meta['hosts_total']) * 100.0
+
+    df.rename(
+        inplace=True,
+        columns={
+            "task_number": "task_number_%",
+            "forks_active": "forks_active_%",
+            "hosts_active": "hosts_active_%",
+            "hosts_remaining": "hosts_remaining_%"
+        }
+    )
+
+    ax = df.plot(kind='line', figsize=(20,12), title=title)
+    plt.savefig('res.png')
+    '''
+
+    ax = plt.gca()
+    splts = df.plot(kind='line', figsize=(20,12), title=title, subplots=True)
+    plt.tight_layout()
+    plt.savefig('res.png')
+    plt.clf()
+    plt.cla()
+    plt.close()
 
 
 def main():
-    files = glob.glob('benchmark_results/*.json') 
-    obs = process_files(files)
 
-    logger.info('writing observations.json')
-    with open('observations.json', 'w') as f:
-        f.write(json.dumps(list(obs.values())))
+    ofile = 'benchmark_results/observations.json'
+    mfile = 'benchmark_results/meta.json'
+
+    if os.path.exists(ofile) and os.path.exists(mfile):
+
+        logger.info('load %s' % ofile)
+        with open(ofile, 'r') as f:
+            obs = json.loads(f.read())
+        logger.info('load %s' % mfile)
+        with open(mfile, 'r') as f:
+            meta = json.loads(f.read())
+
+    else:
+        files = glob.glob('benchmark_results/*.json') 
+        meta,obs = process_files(files)
+
+        logger.info('writing observations.json')
+        with open(ofile, 'w') as f:
+            f.write(json.dumps(obs))
+        logger.info('writing meta.json')
+        with open(mfile, 'w') as f:
+            f.write(json.dumps(meta))
+
+    graph_observations(meta, obs)
 
 
 if __name__ == "__main__":

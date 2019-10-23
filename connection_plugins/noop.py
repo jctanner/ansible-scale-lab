@@ -73,10 +73,13 @@ class Connection(ConnectionBase):
         super(Connection, self).exec_command(cmd, in_data=in_data, sudoable=sudoable)
 
         display.vvv(u"ESTABLISH SSH CONNECTION FOR USER: {0}".format(self._play_context.remote_user), host=self._play_context.remote_addr)
-        #display.display(u"ESTABLISH SSH CONNECTION FOR USER: {0}".format(self._play_context.remote_user))
 
-        #if 'python' in cmd and 'AnsiballZ' in cmd:
-        #    time.sleep(2)
+        # introduce arbitrary delay to demonstrate fork counts are also 
+        # dependant on how long the workers take to finish
+        if 'python' in cmd and 'AnsiballZ' in cmd:
+            time.sleep(.5)
+        else:
+            time.sleep(.1)
 
         return (0, '{}', '')
 
@@ -86,7 +89,7 @@ class Connection(ConnectionBase):
         super(Connection, self).put_file(in_path, out_path)
 
         display.vvv(u"PUT {0} TO {1}".format(in_path, out_path), host=self.host)
-        #display.display(u"PUT {0} TO {1}".format(in_path, out_path))
+
         return (0, '{}', '')
 
     def fetch_file(self, in_path, out_path):
@@ -95,7 +98,6 @@ class Connection(ConnectionBase):
         super(Connection, self).fetch_file(in_path, out_path)
 
         display.vvv(u"FETCH {0} TO {1}".format(in_path, out_path), host=self.host)
-        #display.display(u"FETCH {0} TO {1}".format(in_path, out_path))
 
         return (0, '{}', '')
 

@@ -63,7 +63,7 @@ class StrategyModule(LinearStrategyModule):
     def __init__(self, tqm):
         super(StrategyModule, self).__init__(tqm)
 
-        self.hostcount = 1000
+        self.hostcount = 25000
         self.host_queue_starts = []
         self.concurrent_hosts = []
 

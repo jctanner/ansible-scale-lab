@@ -1,0 +1,18 @@
+- hosts: localhost
+  gather_facts: False
+  connection: local
+  strategy: benchmark
+  tasks:
+    - debug: msg="dummy play"
+
+- hosts: testhosts
+  gather_facts: False
+  connection: noop
+  strategy: benchmark
+  tasks:
+    - name: shell.whoami.1
+      shell: whoami
+    - name: shell.whoami.2
+      shell: whoami
+    - name: shell.whoami.3
+      shell: whoami

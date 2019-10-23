@@ -108,3 +108,5 @@ venv.bak/
 jobresults/*
 plots/*
 ansible.checkout
+benchmark_results*
+observations*

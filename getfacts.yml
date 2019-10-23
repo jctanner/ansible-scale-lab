@@ -1,0 +1,9 @@
+- hosts: localhost
+  gather_facts: False
+  connection: local
+  tasks:
+      - setup:
+        register: setup_res
+      - copy:
+          content: "{{ setup_res | to_nice_json(indent=2) }}"
+          dest: /tmp/facts.json

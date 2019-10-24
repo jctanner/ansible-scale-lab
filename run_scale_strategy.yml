@@ -12,7 +12,17 @@
   tasks:
     - name: shell.whoami.1
       shell: whoami
-    - name: setup
-      setup:
     - name: shell.whoami.2
       shell: whoami
+    - name: debug.1
+      debug: msg="test"
+    - name: setup
+      setup:
+    - name: shell.whoami.3
+      shell: whoami
+    - name: shell.whoami.4
+      shell: whoami
+    - name: debug.2
+      debug: msg="test"
+    - name: debug.3.pipe
+      debug: msg="{{ lookup('pipe', 'sleep .5') }}"

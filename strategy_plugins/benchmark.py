@@ -34,7 +34,9 @@ DOCUMENTATION = '''
 import json
 import os
 import shutil
+import subprocess
 import time
+
 from collections import OrderedDict
 
 from ansible.errors import AnsibleError, AnsibleAssertionError
@@ -56,6 +58,7 @@ from ansible.plugins.strategy.linear import StrategyModule as LinearStrategyModu
 
 class StrategyModule(LinearStrategyModule):
 
+    br_dir = 'benchmark_results'
     hostcount = None
     host_queue_starts =  None
     concurrent_hosts = None
@@ -63,7 +66,11 @@ class StrategyModule(LinearStrategyModule):
     def __init__(self, tqm):
         super(StrategyModule, self).__init__(tqm)
 
-        self.hostcount = 25000
+        if os.path.exists(self.br_dir):
+            shutil.rmtree(self.br_dir)
+        os.mkdir(self.br_dir)
+
+        self.hostcount = 1000
         self.host_queue_starts = []
         self.concurrent_hosts = []
 
@@ -83,7 +90,6 @@ class StrategyModule(LinearStrategyModule):
                     self._add_host(hd, None)
 
     def _queue_task(self, *args, **kwargs):
-        #display.display('[strategy] _queue_task host:%s task:%s' % (args[0], args[1]))
         ts = time.time()
         self.host_queue_starts.append({
             'host': str(args[0]),
@@ -91,28 +97,28 @@ class StrategyModule(LinearStrategyModule):
             'task_name': args[1].name,
             'time': ts
         })
-        #print(self._blocked_hosts)
         self.concurrent_hosts.append({
             'time': ts,
             'task_uuid': args[1]._uuid,
             'task_name': args[1].name,
             'active': list(self._blocked_hosts.keys())
         })
-        #import epdb; epdb.st()
         return super(StrategyModule, self)._queue_task(*args, **kwargs)
 
     def run(self, *args, **kwargs):
         display.display('[strategy] run')
+
+        pslog = os.path.join(self.br_dir, 'ps.log')
+        cmd = "while true; do date +'\n#%%s.%%3N' >> %s; ps xao pid,ppid,pgid,sid,%%cpu,%%mem,cmd -w 512 >> %s; sleep .1; done;" % (pslog, pslog)
+        watcher = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+
         start_time = time.time()
         result = super(StrategyModule, self).run(*args, **kwargs)
         stop_time = time.time()
 
-        br_dir = 'benchmark_results'
-        if os.path.exists(br_dir):
-            shutil.rmtree(br_dir)
-        os.mkdir(br_dir)
-        display.display('[strategy] writing benchmark results to %s' % br_dir)
+        watcher.kill()
 
+        display.display('[strategy] writing benchmark results to %s' % self.br_dir)
         ts = str(time.time())
         meta = {
             'start': start_time,
@@ -121,11 +127,11 @@ class StrategyModule(LinearStrategyModule):
             'hosts': self.hostcount,
             'time': ts
         }
-        with open(os.path.join(br_dir, '%s_meta.json' % ts), 'w') as f:
+        with open(os.path.join(self.br_dir, '%s_meta.json' % ts), 'w') as f:
             f.write(json.dumps(meta, indent=2))
-        with open(os.path.join(br_dir, '%s_host_queue_starts.json' % ts), 'w') as f:
+        with open(os.path.join(self.br_dir, '%s_host_queue_starts.json' % ts), 'w') as f:
             f.write(json.dumps(self.host_queue_starts, indent=2))
-        with open(os.path.join(br_dir, '%s_concurrent_hosts.json' % ts), 'w') as f:
+        with open(os.path.join(self.br_dir, '%s_concurrent_hosts.json' % ts), 'w') as f:
             f.write(json.dumps(self.concurrent_hosts, indent=2))
 
         return result

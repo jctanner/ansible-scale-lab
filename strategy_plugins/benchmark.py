@@ -58,7 +58,7 @@ from ansible.plugins.strategy.linear import StrategyModule as LinearStrategyModu
 
 class StrategyModule(LinearStrategyModule):
 
-    br_dir = 'benchmark_results'
+    #br_dir = None
     hostcount = None
     host_queue_starts =  None
     concurrent_hosts = None
@@ -66,11 +66,9 @@ class StrategyModule(LinearStrategyModule):
     def __init__(self, tqm):
         super(StrategyModule, self).__init__(tqm)
 
-        if os.path.exists(self.br_dir):
-            shutil.rmtree(self.br_dir)
-        os.mkdir(self.br_dir)
+        #self._set_br_dir()
 
-        self.hostcount = 1000
+        self.hostcount = int(os.environ.get('HOSTCOUNT', 100))
         self.host_queue_starts = []
         self.concurrent_hosts = []
 
@@ -88,6 +86,16 @@ class StrategyModule(LinearStrategyModule):
                         }
                     }
                     self._add_host(hd, None)
+
+    @property
+    def br_dir(self):
+        brdir = os.environ.get('BENCHMARK_RESULTS', 'benchmark_results')
+        #if os.path.exists(self.br_dir):
+        #    shutil.rmtree(self.br_dir)
+        #os.mkdir(self.br_dir)
+        if not os.path.exists(brdir):
+            os.mkdir(brdir)
+        return brdir
 
     def _queue_task(self, *args, **kwargs):
         ts = time.time()
@@ -107,6 +115,7 @@ class StrategyModule(LinearStrategyModule):
 
     def run(self, *args, **kwargs):
         display.display('[strategy] run')
+        #self._set_br_dir()
 
         pslog = os.path.join(self.br_dir, 'ps.log')
         cmd = "while true; do date +'\n#%%s.%%3N' >> %s; ps xao pid,ppid,pgid,sid,%%cpu,%%mem,cmd -w 512 >> %s; sleep .1; done;" % (pslog, pslog)

@@ -2,8 +2,8 @@
 
 PLAYBOOK=run_scale_strategy.yml
 
-for FORKCOUNT in $(seq 5 100 5); do
-    for HOSTCOUNT in $(seq 100 200 100); do
+for FORKCOUNT in $(seq 100 100); do
+    for HOSTCOUNT in $(seq 10000 10000); do
         echo "hosts:$HOSTCOUNT forks:$FORKCOUNT"
         export HOSTCOUNT=$HOSTCOUNT
         export BENCHMARK_RESULTS="results.h${HOSTCOUNT}.f${FORKCOUNT}"
